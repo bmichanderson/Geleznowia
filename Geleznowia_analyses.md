@@ -485,6 +485,3 @@ This produces the file `concord_scf.tre` to input as a treefile to `plot_tree.rm
 
 
 It can be insightful to look at the bootstrap tree splits, which can be calculated using the `boots.tre` files from both runs as input to SplitsTree4 v. 4.17.1 to construct Consensus Networks showing splits present in at least 10 trees and weighted by count  
-
-
-## Population diversity?
