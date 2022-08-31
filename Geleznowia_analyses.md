@@ -1,4 +1,4 @@
-***Geleznowia* ddRAD analyses**  
+# *Geleznowia* ddRAD analyses  
 Author: B.M. Anderson  
 
 These notes outline the analyses run on ddRAD data to generate results for the paper "[Title]"  
@@ -49,7 +49,7 @@ After estimating error and clonality (see below), one of each of the technical r
 
 
 ## Tiger genotyping error estimate
-Create a subset of the VCF for the replicate pairs (one of the reps in each pair is named with a "_R" subscript for sampleID) 
+Create a subset of the VCF for the replicate pairs (one of the reps in each pair is named with a "_R" subscript for sampleID)  
 First, create a list of the samples
 ```s
 grep "_R" samples_full.txt | cut -f 1 -d "_" > temp
@@ -70,7 +70,7 @@ Using the technical replicates and the software Tiger (https://bitbucket.org/weg
 Create an input samples file for Tiger (needs reps assigned to groups)  
 ```s
 mkdir tiger && cd tiger
-num=$(($(wc -l < reps.txt) / 2))
+num=$(($(wc -l < ../reps.txt) / 2))
 for ((i=1; i<=num; i++)); do echo $i >> temp && echo $i >> temp; done
 echo -e "Sample\tGroup" > rep_groups.txt
 paste reps.txt temp >> rep_groups.txt
@@ -94,6 +94,7 @@ First, filter the VCF for only ingroup samples and for SNPs found in at least ha
 In our naming convention, outgroup samples have a "Z" in their sampleIDs  
 The script to assess similarity is `vcf_similarity.py`  
 ```s
+# back in the main directory (not in the tiger folder)
 grep "Z" samples_full.txt > samples.to_remove
 python ~/scripts/filter_vcf.py -o clones --mincov 0.5 -s samples.to_remove full.vcf
 python ~/scripts/vcf_similarity.py -v clones.vcf -o clones
@@ -101,7 +102,7 @@ python ~/scripts/vcf_similarity.py -v clones.vcf -o clones
 The output `clones_comps.txt` can be imported into a spreadsheet program and sorted to manually check  
 The output `clones_hist.png` can be useful to see the distribution of comparisons and whether there is a clear break between the replicate comparisions and other comparisons in the dataset  
 
-Using the average between the pairs of technical replicates (0.004) and doubling it (0.008), all comparisons less than that were considered essentially clones  
+Using the average distance between the pairs of technical replicates (0.004) and doubling it (0.008), all comparisons less than that were considered essentially clones  
 Create a text file (`clones.txt`) with groups of sampleIDs that are clones (one sampleID per line), each group separated by a blank line  
 Note: ensure that any technical reps expected to be removed (in the `reps.to_remove` file) are not in this `clones.txt` file  
 
@@ -120,7 +121,7 @@ Create a list of samples that should be excluded (including clones, replicates a
 ```s
 cat clones.to_remove > samples.to_remove
 cat reps.to_remove >> samples.to_remove
-grep Z samples_full.txt >> samples.to_remove
+grep "Z" samples_full.txt >> samples.to_remove
 sort samples.to_remove | uniq > temp
 mv temp samples.to_remove
 ```
@@ -174,6 +175,7 @@ for locus in locus*.fasta; do
 python ~/scripts/remove_fastas.py -f ../samples.to_remove "$locus"
 mv mod_"$locus" "$locus"
 done
+# this takes a while
 ```
 
 All the loci can be combined into a single alignment using the script `combine_alignments.py`  
@@ -458,7 +460,7 @@ This is for running PAUP* 4.0a (build 168) for Unix/Linux in a Singularity conta
 ```s
 singularity exec paup.sif paup batch.nex
 ```
-(this would be run twice for the lineages and species runs)  
+(this would need to be executed separately for the lineages and species runs, in separate folders)  
 
 The resulting trees can be plotted using the same `plot_tree.rmd`  
 
