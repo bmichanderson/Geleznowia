@@ -1,4 +1,4 @@
-# Geleznowia-Anderson-etal-2022
+# Geleznowia-Anderson-etal
 Documentation for analyses of genomic RADseq data for *Geleznowia* (Rutaceae)
 
 This repository contains the scripts used for running all genomic analyses in the paper "[Title]"  
