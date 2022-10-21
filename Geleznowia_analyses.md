@@ -73,13 +73,13 @@ mkdir tiger && cd tiger
 num=$(($(wc -l < ../reps.txt) / 2))
 for ((i=1; i<=num; i++)); do echo $i >> temp && echo $i >> temp; done
 echo -e "Sample\tGroup" > rep_groups.txt
-paste reps.txt temp >> rep_groups.txt
+paste ../reps.txt temp >> rep_groups.txt
 rm temp
 ```
 
 Now run error estimation and visualise it with the script `Tiger_error_plot.py`  
 ```s
-tiger task=estimateIndReps outname=error vcf=error.vcf groups=rep_groups.txt
+tiger task=estimateIndReps outname=error vcf=../error.vcf groups=rep_groups.txt
 python ~/scripts/Tiger_error_plot.py -o error -m 500 error_errorRates.txt
 ```
 This will create an `error.pdf` file  
@@ -162,20 +162,11 @@ Filter
 python ~/scripts/filter_vcf.py -o phylo --mincov 0.5 --minmd 17 --maxmd 100 --mac 1 -s samples.to_remove full.vcf
 ```
 
-From the filtered VCF, loci names can be extracted and used to extract the full alignments from `full.loci` using the script `loci_extract.py`  
+From the filtered VCF, loci names can be extracted and used to extract the full alignments from `full.loci` using the script `loci_extract.py` and at the same time removing undesirable samples  
 ```s
 grep -v "#" phylo.vcf | cut -f 1 | uniq | sed 's/RAD_//g' > loci.txt
 mkdir loci_extract && cd loci_extract
-python ~/scripts/loci_extract.py -l ../loci.txt ../full.loci
-```
-
-Now, the loci files need to have any taxa removed (using the script `remove_fastas.py`) that were removed in the VCF filtering  
-```s
-for locus in locus*.fasta; do
-python ~/scripts/remove_fastas.py -f ../samples.to_remove "$locus"
-mv mod_"$locus" "$locus"
-done
-# this takes a while
+python ~/scripts/loci_extract.py -l ../loci.txt -s ../samples.to_remove ../full.loci
 ```
 
 All the loci can be combined into a single alignment using the script `combine_alignments.py`  
