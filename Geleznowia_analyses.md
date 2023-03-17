@@ -1,7 +1,7 @@
 # *Geleznowia* ddRAD analyses  
 Author: B.M. Anderson  
 
-These notes outline the analyses run on ddRAD data to generate results for the paper "[Title]"  
+These notes outline the analyses run on ddRAD data to generate results for the paper "Using RADseq to resolve species boundaries in a morphologically complex group of yellow-flowered shrubs (*Geleznowia*, Rutaceae)"  
 All scripts are assumed to be in an accessible folder for relative calls, indicated here as a directory in home called `~/scripts/`  
 
 
@@ -27,7 +27,7 @@ This will produce four barcodes files, one per index
 # Assembly in ipyrad
 ipyrad v. 0.9.81 running in a Singularity container (ipyrad installed with miniconda)  
 Depending on the high performance computing setup, the method of executing the run will change  
-The run was executed on the Zeus cluster on Pawsey (no longer running), using an sbatch script to call the container to execute a Python script that specified the run parameters (`ipyrad_full.py`)  
+The run was executed on the Zeus cluster on Pawsey (no longer running), using an sbatch script to call the container to execute a python3 script that specified the run parameters (`ipyrad_full.py`)  
 
 An initial run showed that four samples had too few reads to be retained: MAR06-06-343713, ZPP01-05_R-343786, ZPS01-04_R-343787, ZPS01-06-343778  
 Based on preliminary optimisation runs on subsets of the data, the optimal clustering threshold was determined to be 0.93  
@@ -36,11 +36,11 @@ The full run therefore used the optimal clustering threshold and was subset to e
 The run used 28 CPUs and took roughly 12.5 hours  
 The command to run was roughly as follows, with the read and barcode files in the working directory
 ```s
-singularity exec -B "$(pwd)":/home/"$USER" ipyrad.sif python ipyrad_full.py 28 samples_full.txt
+singularity exec -B "$(pwd)":/home/"$USER" ipyrad.sif python3 ipyrad_full.py 28 samples_full.txt
 ```
-The primary output for downstream analyses is the VCF file: `full.vcf`  
+The primary output for downstream analyses is the VCF file: `full.vcf` (not provided here due to size restrictions)  
 The VCF file is largely unfiltered, keeping all loci found in at least three samples  
-Another output, `full.loci`, can be used to access all sites (not just SNPs)  
+Another output, `full.loci` (again, not provided), can be used to access all sites (not just SNPs)  
 
 
 # Filtering
@@ -61,8 +61,8 @@ Now filter the VCF for just those samples, as well as for a minimum sample cover
 Then use the script `single_snp.py` to select a single SNP per locus (max depth or random in the case of ties in coverage)  
 ```s
 grep -v -f reps.txt samples_full.txt > samples.to_remove 
-python ~/scripts/filter_vcf.py -o error --mincov 0.5 --minmd 10 --bial yes -s samples.to_remove full.vcf
-python ~/scripts/single_snp.py -r yes error.vcf
+python3 ~/scripts/filter_vcf.py -o error --mincov 0.5 --minmd 10 --bial yes -s samples.to_remove full.vcf
+python3 ~/scripts/single_snp.py -r yes error.vcf
 mv mod_error.vcf error.vcf
 ```
 
@@ -80,7 +80,7 @@ rm temp
 Now run error estimation and visualise it with the script `Tiger_error_plot.py`  
 ```s
 tiger task=estimateIndReps outname=error vcf=../error.vcf groups=rep_groups.txt
-python ~/scripts/Tiger_error_plot.py -o error -m 500 error_errorRates.txt
+python3 ~/scripts/Tiger_error_plot.py -o error -m 500 error_errorRates.txt
 ```
 This will create an `error.pdf` file  
 Based on the error rate estimates, mean read depth cutoffs of min 17 and max 100 were chosen  
@@ -96,15 +96,26 @@ The script to assess similarity is `vcf_similarity.py`
 ```s
 # back in the main directory (not in the tiger folder)
 grep "Z" samples_full.txt > samples.to_remove
-python ~/scripts/filter_vcf.py -o clones --mincov 0.5 -s samples.to_remove full.vcf
-python ~/scripts/vcf_similarity.py -v clones.vcf -o clones
+python3 ~/scripts/filter_vcf.py -o clones --mincov 0.5 -s samples.to_remove full.vcf
+python3 ~/scripts/vcf_similarity.py -v clones.vcf -o clones
 ```
-The output `clones_comps.txt` can be imported into a spreadsheet program and sorted to manually check  
-The output `clones_hist.png` can be useful to see the distribution of comparisons and whether there is a clear break between the replicate comparisions and other comparisons in the dataset  
+The assessment is based on 58,219 SNPs from 150 samples  
+
+The output `clones_comps.txt` can be imported into a spreadsheet program and sorted to manually check a cutoff threshold (looking at replicates)  
+The output `clones_hist.png` can be useful to see the distribution of comparisons and whether there is a clear break between the replicate comparisons and other comparisons in the dataset  
+The output `clones_boxplot.png` can be useful to visualise the range of comparisons within populations  
 
 Using the average distance between the pairs of technical replicates (0.004) and doubling it (0.008), all comparisons less than that were considered essentially clones  
-Create a text file (`clones.txt`) with groups of sampleIDs that are clones (one sampleID per line), each group separated by a blank line  
-Note: ensure that any technical reps expected to be removed (in the `reps.to_remove` file) are not in this `clones.txt` file  
+
+Use that threshold and the script `collate_clones.py` to get a text file (`clones.txt`) with the clone groups (each separated by a blank line)  
+Note: ensure that any technical reps expected to be removed (in the `reps.to_remove` file) are removed from the `clones.txt` file  
+```s
+python3 ~/scripts/collate_clones.py -t 0.008 clones_comps.txt > clones.txt 
+grep -f reps.to_remove clones.txt > temp
+grep -v -f temp clones.txt > new_clones.txt
+mv new_clones.txt clones.txt
+rm temp
+```
 
 Now randomly select a single representative per clone group to keep  
 ```s
@@ -113,6 +124,9 @@ for file in clone_*; do shuf -n 1 "$file" >> clones.to_keep; done
 for file in clone_*; do grep -v -f clones.to_keep "$file" >> clones.to_remove; done
 rm clone_*
 ```
+
+This resulted in the removal of 57 samples  
+
 
 
 ## Set 1: ingroup (strict filtering)
@@ -128,8 +142,8 @@ mv temp samples.to_remove
 
 Filter
 ```s
-python ~/scripts/filter_vcf.py -o set1 --mincov 0.9 --minmd 17 --maxmd 100 --mac 3 --bial yes -s samples.to_remove full.vcf
-python ~/scripts/single_snp.py -r yes set1.vcf
+python3 ~/scripts/filter_vcf.py -o set1 --mincov 0.9 --minmd 17 --maxmd 100 --mac 3 --bial yes -s samples.to_remove full.vcf
+python3 ~/scripts/single_snp.py -r yes set1.vcf
 mv mod_set1.vcf set1.vcf
 ```
 
@@ -137,8 +151,8 @@ mv mod_set1.vcf set1.vcf
 ## Set 2: ingroup (lax filtering)
 For the distance network analysis, there was less sensitivity to missing data, so the VCF was filtered in a similar way to Set 1 but only requiring SNPs be present in 25% of samples (still one per locus), with no restrictions on allele count  
 ```s
-python ~/scripts/filter_vcf.py -o set2 --mincov 0.25 --minmd 17 --maxmd 100 --mac 1 -s samples.to_remove full.vcf
-python ~/scripts/single_snp.py -r yes set2.vcf
+python3 ~/scripts/filter_vcf.py -o set2 --mincov 0.25 --minmd 17 --maxmd 100 --mac 1 -s samples.to_remove full.vcf
+python3 ~/scripts/single_snp.py -r yes set2.vcf
 mv mod_set2.vcf set2.vcf
 ```
 
@@ -159,21 +173,21 @@ mv temp samples.to_remove
 
 Filter
 ```s
-python ~/scripts/filter_vcf.py -o phylo --mincov 0.5 --minmd 17 --maxmd 100 --mac 1 -s samples.to_remove full.vcf
+python3 ~/scripts/filter_vcf.py -o phylo --mincov 0.5 --minmd 17 --maxmd 100 --mac 1 -s samples.to_remove full.vcf
 ```
 
 From the filtered VCF, loci names can be extracted and used to extract the full alignments from `full.loci` using the script `loci_extract.py` and at the same time removing undesirable samples  
 ```s
 grep -v "#" phylo.vcf | cut -f 1 | uniq | sed 's/RAD_//g' > loci.txt
 mkdir loci_extract && cd loci_extract
-python ~/scripts/loci_extract.py -l ../loci.txt -s ../samples.to_remove ../full.loci
+python3 ~/scripts/loci_extract.py -l ../loci.txt -s ../samples.to_remove ../full.loci
 ```
 
 All the loci can be combined into a single alignment using the script `combine_alignments.py`  
 In addition, the alignment needs to then be filtered to remove any positions with more than 50% missing data (using the script `clean_alignment.py`)
 ```s
-python ~/scripts/combine_alignments.py -f single *.fasta
-python ~/scripts/clean_alignment.py -p 50 combine_out.fasta
+python3 ~/scripts/combine_alignments.py -f single *.fasta
+python3 ~/scripts/clean_alignment.py -p 50 combine_out.fasta
 mv combine_out_clean.fasta ../concat_loci.fasta
 cd .. && rm -r loci_extract
 ```
@@ -183,7 +197,7 @@ The resulting file is `concat_loci.fasta`
 ## Set 4: phylo (coalescent)
 For running SVDquartets, extract a single SNP per locus from the same loci as were used for concatenation (present in at least 50% of samples)
 ```s
-python ~/scripts/single_snp.py -r yes phylo.vcf
+python3 ~/scripts/single_snp.py -r yes phylo.vcf
 ```
 This will create the file `mod_phylo.vcf`  
 
@@ -256,7 +270,7 @@ sed -i 's/WHT01$/8/g' str_pops.tab
 
 Use the mapping file and generate the Structure input file with the script `vcf_to_structure.py`  
 ```s
-python ~/scripts/vcf_to_structure.py -p str_pops.tab set1.vcf
+python3 ~/scripts/vcf_to_structure.py -p str_pops.tab set1.vcf
 mv set1.vcf.str set1.str
 ```
 
@@ -323,8 +337,8 @@ Evaluate the best K based on the Evanno method using the script `bestK_Evanno.py
 ```s
 cat k*likes.txt > all_likes.txt
 cat select*likes.txt > all_likes_selected.txt
-python ~/scripts/bestK_Evanno.py -l all_likes.txt -o set1_bestK_all
-python ~/scripts/bestK_Evanno.py -l all_likes_selected.txt -o set1_bestK_selected
+python3 ~/scripts/bestK_Evanno.py -l all_likes.txt -o set1_bestK_all
+python3 ~/scripts/bestK_Evanno.py -l all_likes_selected.txt -o set1_bestK_selected
 ```
 
 Upload the top 10 per K to CLUMPAK (http://clumpak.tau.ac.il/index.html) to run with default settings
@@ -358,7 +372,7 @@ Colours for the bars are specified in a `colours.txt` file, one colour (in hex c
 Note: change the qfile and `-o` arguments for the minor mode files, if desired  
 ```s
 for num in {2..8}; do
-python ~/scripts/structure_barplots.py -o K"$num" -p str_pops.tab -q qfile"$num".txt -c colours.txt
+python3 ~/scripts/structure_barplots.py -o K"$num" -p str_pops.tab -q qfile"$num".txt -c colours.txt
 done
 ```
 The resulting barplots can be combined manually into a single figure in Inkscape  
@@ -407,7 +421,7 @@ sed -i 's/ZPC01$/Psericea/g' spp.tab
 
 Use that for creating the input NEXUS file (`mod_phylo.nex`)  
 ```s
-python ~/scripts/vcf_to_svd.py -v mod_phylo.vcf -f seq -s spp.tab
+python3 ~/scripts/vcf_to_svd.py -v mod_phylo.vcf -f seq -s spp.tab
 ```
 
 Now create batch files (text files called `batch.nex`) for running PAUP, the first for lineages  
@@ -472,7 +486,7 @@ iqtree -s mod_phylo.nex -t qfm_mod.tre --scf 100000 -T 8 --prefix concord
 ```
 The output can be extracted into a tree form usable by the `plot_tree.rmd` using the script `concord_to_newick.py`  
 ```s
-python ~/scripts/concord_to_newick.py -t concord.cf.tree.nex -o concord
+python3 ~/scripts/concord_to_newick.py -t concord.cf.tree.nex -o concord
 ```
 This produces the file `concord_scf.tre` to input as a treefile to `plot_tree.rmd`  
 
